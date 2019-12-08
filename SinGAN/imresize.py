@@ -36,7 +36,9 @@ def np2torch(x,opt):
     return x
 
 def torch2uint8(x):
-    x = x[0,:,:,:]
+    # shengjian
+    if len(x.shape) >= 4:
+        x = x[0,:,:,:]
     x = x.permute((1,2,0))
     x = 255*denorm(x)
     x = x.cpu().numpy()
@@ -63,8 +65,10 @@ def imresize_to_shape(im,output_shape,opt):
 
 def imresize_in(im, scale_factor=None, output_shape=None, kernel=None, antialiasing=True, kernel_shift_flag=False):
     # First standardize values and fill missing arguments (if needed) by deriving scale from output shape or vice versa
+    #print("img shape", im.shape)
+    #print(scale_factor)
     scale_factor, output_shape = fix_scale_and_size(im.shape, output_shape, scale_factor)
-
+    #print(scale_factor)
     # For a given numeric kernel case, just do convolution and sub-sampling (downscaling only)
     if type(kernel) == np.ndarray and scale_factor[0] <= 1:
         return numeric_kernel(im, kernel, scale_factor, output_shape, kernel_shift_flag)

@@ -16,10 +16,11 @@ from sklearn.cluster import KMeans
 
 
 # custom weights initialization called on netG and netD
-
+'''
 def read_image(opt):
     x = img.imread('%s%s' % (opt.input_img,opt.ref_image))
     return np2torch(x)
+    '''
 
 def denorm(x):
     out = (x + 1) / 2
@@ -149,6 +150,19 @@ def calc_gradient_penalty(netD, real_data, fake_data, LAMBDA, device):
 def read_image(opt):
     x = img.imread('%s/%s' % (opt.input_dir,opt.input_name))
     x = np2torch(x,opt)
+    #x = x[:,0:3,:,:]
+    return x
+
+def read_multiple_image(opt):
+    imgs = []
+    for image_name in os.listdir(opt.input_dir):
+        input_path = os.path.join(opt.input_dir, image_name)
+        x = img.imread(input_path)
+        imgs.append(x)
+    x = np.array(imgs)
+    print("x shape", x.shape)
+    x = np2torch(x, opt)
+    opt.num_sample = x.shape[0]
     x = x[:,0:3,:,:]
     return x
 
@@ -159,9 +173,14 @@ def read_image_dir(dir,opt):
     return x
 
 def np2torch(x,opt):
+    #print("x shape", x.shape)
     if opt.nc_im == 3:
-        x = x[:,:,:,None]
-        x = x.transpose((3, 2, 0, 1))/255
+        if len(x.shape) < 4:
+            x = x[:,:,:,None]
+            x = x.transpose((3, 2, 0, 1))/255
+        else:
+            x = x.transpose((0, 3, 1, 2))/255
+        #print("af x shape", x.shape)
     else:
         x = color.rgb2gray(x)
         x = x[:,:,None,None]
@@ -220,9 +239,14 @@ def adjust_scales2image_SR(real_,opt):
 
 def creat_reals_pyramid(real,reals,opt):
     real = real[:,0:3,:,:]
+    #print("pyra real shape", real.shape)
     for i in range(0,opt.stop_scale+1,1):
         scale = math.pow(opt.scale_factor,opt.stop_scale-i)
-        curr_real = imresize(real,scale,opt)
+        #curr_real = imresize(real,scale,opt)
+        curr_real = imresize(real[0],scale,opt)
+        for i in range(1, real.shape[0]):
+            img = imresize(real[i],scale,opt)
+            curr_real = torch.cat((curr_real, img), 0)
         reals.append(curr_real)
     return reals
 

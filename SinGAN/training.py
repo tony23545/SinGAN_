@@ -4,18 +4,31 @@ import os
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
+import torch
 import math
 import matplotlib.pyplot as plt
 from SinGAN.imresize import imresize
 
 def train(opt,Gs,Zs,reals,NoiseAmp):
-    real_ = functions.read_image(opt)
+    #real_ = functions.read_image(opt)
+    #opt.num_sample = 1
+    real_ = functions.read_multiple_image(opt)
+    print("real shape", real_.shape)
     in_s = 0
     scale_num = 0
-    real = imresize(real_,opt.scale1,opt)
+    #real = imresize(real_,opt.scale1,opt)
+    real = imresize(real_[0],opt.scale1,opt)
+    for i in range(1, real_.shape[0]):
+        img = imresize(real_[i],opt.scale1,opt)
+        real = torch.cat((real, img), 0)
+    print("af real_shape", real.shape)
     reals = functions.creat_reals_pyramid(real,reals,opt)
+    print("reals len", len(reals))
+    #print(reals[0].shape)
+    #print(reals[2].shape)
+    #print(reals[4].shape)
     nfc_prev = 0
-
+    
     while scale_num<opt.stop_scale+1:
         opt.nfc = min(opt.nfc_init * pow(2, math.floor(scale_num / 4)), 128)
         opt.min_nfc = min(opt.min_nfc_init * pow(2, math.floor(scale_num / 4)), 128)
@@ -29,7 +42,8 @@ def train(opt,Gs,Zs,reals,NoiseAmp):
 
         #plt.imsave('%s/in.png' %  (opt.out_), functions.convert_image_np(real), vmin=0, vmax=1)
         #plt.imsave('%s/original.png' %  (opt.out_), functions.convert_image_np(real_), vmin=0, vmax=1)
-        plt.imsave('%s/real_scale.png' %  (opt.outf), functions.convert_image_np(reals[scale_num]), vmin=0, vmax=1)
+        print("shape     ", reals[scale_num][[0], :, :, :].shape)
+        plt.imsave('%s/real_scale.png' %  (opt.outf), functions.convert_image_np(reals[scale_num][[0], :, :, :]), vmin=0, vmax=1)
 
         D_curr,G_curr = init_models(opt)
         if (nfc_prev==opt.nfc):
@@ -58,10 +72,11 @@ def train(opt,Gs,Zs,reals,NoiseAmp):
     return
 
 
-
 def train_single_scale(netD,netG,reals,Gs,Zs,in_s,NoiseAmp,opt,centers=None):
 
-    real = reals[len(Gs)]
+    real_mul = reals[len(Gs)]
+    real = real_mul[[0], :, :, :]
+    #print("real shape", real.shape)
     opt.nzx = real.shape[2]#+(opt.ker_size-1)*(opt.num_layer)
     opt.nzy = real.shape[3]#+(opt.ker_size-1)*(opt.num_layer)
     opt.receptive_field = opt.ker_size + ((opt.ker_size-1)*(opt.num_layer-1))*opt.stride
@@ -94,13 +109,16 @@ def train_single_scale(netD,netG,reals,Gs,Zs,in_s,NoiseAmp,opt,centers=None):
 
     for epoch in range(opt.niter):
         if (Gs == []) & (opt.mode != 'SR_train'):
-            z_opt = functions.generate_noise([1,opt.nzx,opt.nzy], device=opt.device)
-            z_opt = m_noise(z_opt.expand(1,3,opt.nzx,opt.nzy))
-            noise_ = functions.generate_noise([1,opt.nzx,opt.nzy], device=opt.device)
-            noise_ = m_noise(noise_.expand(1,3,opt.nzx,opt.nzy))
+            z_opt = functions.generate_noise([1,opt.nzx,opt.nzy], num_samp=opt.num_sample, device=opt.device)
+            z_opt = m_noise(z_opt.expand(opt.num_sample,3,opt.nzx,opt.nzy))
+            noise_ = functions.generate_noise([1,opt.nzx,opt.nzy], num_samp=opt.num_sample, device=opt.device)
+            #print("noise shape", noise_.shape)
+            noise_ = m_noise(noise_.expand(opt.num_sample,3,opt.nzx,opt.nzy))
         else:
-            noise_ = functions.generate_noise([opt.nc_z,opt.nzx,opt.nzy], device=opt.device)
+            noise_ = functions.generate_noise([opt.nc_z,opt.nzx,opt.nzy], num_samp = opt.num_sample, device=opt.device)
             noise_ = m_noise(noise_)
+
+        #print("noise size", noise_.shape)
 
         ############################
         # (1) Update D network: maximize D(x) + D(G(z))
@@ -109,7 +127,8 @@ def train_single_scale(netD,netG,reals,Gs,Zs,in_s,NoiseAmp,opt,centers=None):
             # train with real
             netD.zero_grad()
 
-            output = netD(real).to(opt.device)
+            output = netD(real_mul).to(opt.device)
+            #print("output shape ", output.shape)
             #D_real_map = output.detach()
             errD_real = -output.mean()#-a
             errD_real.backward(retain_graph=True)
@@ -153,6 +172,7 @@ def train_single_scale(netD,netG,reals,Gs,Zs,in_s,NoiseAmp,opt,centers=None):
                 noise = opt.noise_amp*noise_+prev
 
             fake = netG(noise.detach(),prev)
+            #print("fake shape", fake.shape)
             output = netD(fake.detach())
             errD_fake = output.mean()
             errD_fake.backward(retain_graph=True)
