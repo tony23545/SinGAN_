@@ -109,8 +109,8 @@ def train_single_scale(netD,netG,reals,Gs,Zs,in_s,NoiseAmp,opt,centers=None):
 
     for epoch in range(opt.niter):
         if (Gs == []) & (opt.mode != 'SR_train'):
-            z_opt = functions.generate_noise([1,opt.nzx,opt.nzy], num_samp=opt.num_sample, device=opt.device)
-            z_opt = m_noise(z_opt.expand(opt.num_sample,3,opt.nzx,opt.nzy))
+            z_opt = functions.generate_noise([1,opt.nzx,opt.nzy], device=opt.device)
+            z_opt = m_noise(z_opt.expand(1,3,opt.nzx,opt.nzy))
             noise_ = functions.generate_noise([1,opt.nzx,opt.nzy], num_samp=opt.num_sample, device=opt.device)
             #print("noise shape", noise_.shape)
             noise_ = m_noise(noise_.expand(opt.num_sample,3,opt.nzx,opt.nzy))
@@ -202,6 +202,7 @@ def train_single_scale(netD,netG,reals,Gs,Zs,in_s,NoiseAmp,opt,centers=None):
                     z_prev = functions.quant2centers(z_prev, centers)
                     plt.imsave('%s/z_prev.png' % (opt.outf), functions.convert_image_np(z_prev), vmin=0, vmax=1)
                 Z_opt = opt.noise_amp*z_opt+z_prev
+                #print("Z_p ", Z_opt.shape)
                 rec_loss = alpha*loss(netG(Z_opt.detach(),z_prev),real)
                 rec_loss.backward(retain_graph=True)
                 rec_loss = rec_loss.detach()
